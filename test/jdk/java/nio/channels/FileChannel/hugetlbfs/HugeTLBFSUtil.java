@@ -83,12 +83,12 @@ public class HugeTLBFSUtil {
 			var ctor = clazz.getDeclaredConstructor();
 			ctor.setAccessible(true);
 
-			var method = clazz.getDeclaredMethod("blockSize", FileDescriptor.class, String.class);
+			var method = clazz.getDeclaredMethod("blockSize", FileDescriptor.class);
 			method.setAccessible(true);
 
 			var instance = ctor.newInstance();
 
-			blksize = (long) method.invoke(instance, fis.getFD(), null);
+			blksize = (long) method.invoke(instance, fis.getFD());
 		} catch (Exception e) {
 			try {
 				blksize = Files.getFileStore(file.toPath()).getBlockSize();
