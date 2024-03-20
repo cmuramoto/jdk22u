@@ -86,4 +86,8 @@ abstract class FileDispatcher extends NativeDispatcher {
                                long position, long count, boolean append);
 
     abstract int setDirectIO(FileDescriptor fd, String path);
+
+    long blockSize(FileDescriptor fd) {
+        return allocationGranularity();
+    }
 }

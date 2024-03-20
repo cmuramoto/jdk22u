@@ -399,3 +399,19 @@ Java_sun_nio_ch_UnixFileDispatcherImpl_setDirect0(JNIEnv *env, jclass clazz,
 #endif
     return result;
 }
+
+JNIEXPORT jlong JNICALL
+Java_sun_nio_ch_UnixFileDispatcherImpl_blockSize0(JNIEnv* env, jclass this, jobject fdo)
+{
+    jint fd = fdval(env, fdo);
+    jint err;
+    struct statvfs buf;
+    RESTARTABLE(fstatvfs(fd, &buf), err);
+
+    if (err == -1) {
+        JNU_ThrowIOExceptionWithLastError(env, "Error Determining blockSize");
+        return long_to_jlong(-1);
+    }
+
+    return long_to_jlong(buf.f_frsize);
+}

@@ -44,7 +44,10 @@ class UnixFileDispatcherImpl extends FileDispatcher {
     private static final JavaIOFileDescriptorAccess fdAccess =
             SharedSecrets.getJavaIOFileDescriptorAccess();
 
+    private final long ag;
+
     UnixFileDispatcherImpl() {
+        this.ag = allocationGranularity0();
     }
 
     int read(FileDescriptor fd, long address, int len) throws IOException {
@@ -126,7 +129,7 @@ class UnixFileDispatcherImpl extends FileDispatcher {
     }
 
     long allocationGranularity() {
-        return allocationGranularity0();
+        return ag;
     }
 
     long map(FileDescriptor fd, int prot, long position, long length,
@@ -163,6 +166,14 @@ class UnixFileDispatcherImpl extends FileDispatcher {
                 ("Error setting up DirectIO", e);
         }
         return result;
+    }
+
+    long blockSize(FileDescriptor fd) {
+        try {
+            return blockSize0(fd);
+        } catch(IOException e) {
+            return allocationGranularity();
+        }
     }
 
     // -- Native methods --
@@ -213,4 +224,6 @@ class UnixFileDispatcherImpl extends FileDispatcher {
     static native int unmap0(long address, long length);
 
     static native int setDirect0(FileDescriptor fd) throws IOException;
+
+    static native long blockSize0(FileDescriptor fd) throws IOException;
 }

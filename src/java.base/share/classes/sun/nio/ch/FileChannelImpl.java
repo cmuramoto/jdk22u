@@ -99,6 +99,8 @@ public class FileChannelImpl
     private final boolean direct;
 
     // IO alignment value for DirectIO
+    // mmap may require alignment constraints for files with 
+    // non-standard blockSizes, e.g., hugetlbfs
     private final int alignment;
 
     // Cleanable with an action which closes this channel's file descriptor
@@ -134,7 +136,8 @@ public class FileChannelImpl
             assert path != null;
             this.alignment = nd.setDirectIO(fd, path);
         } else {
-            this.alignment = -1;
+            long blockSize = nd.blockSize(fd); 
+            this.alignment = (blockSize > nd.allocationGranularity() && blockSize <= 0x40000000  && (blockSize & (blockSize - 1)) == 0) ? (int)blockSize : -1; 
         }
 
         // Register a cleaning action if and only if there is no parent
@@ -170,6 +173,10 @@ public class FileChannelImpl
 
     private void endBlocking(boolean completed) throws AsynchronousCloseException {
         if (!uninterruptible) end(completed);
+    }
+
+    private boolean needsAlignment() {
+        return /* !direct && */ alignment > 0;
     }
 
     // -- Standard channel operations --
@@ -1276,6 +1283,10 @@ public class FileChannelImpl
         }
     }
 
+    private static long alignUp(long n, long alignment) {
+        return (n + alignment - 1) & -alignment;
+    }
+
     private static void unmap(MappedByteBuffer bb) {
         Cleaner cl = ((DirectBuffer)bb).cleaner();
         if (cl != null)
@@ -1359,8 +1370,11 @@ public class FileChannelImpl
             if (!isOpen())
                 return null;
 
-            long mapSize;
-            int pagePosition;
+            boolean align = needsAlignment();
+            int pagePosition = (int)(align ? position % alignment : position % nd.allocationGranularity());
+            long mapPosition = position - pagePosition;
+            long mapSize = align ? alignUp(size + pagePosition, alignment) : size + pagePosition;
+
             synchronized (positionLock) {
                 long filesize;
                 do {
@@ -1380,10 +1394,11 @@ public class FileChannelImpl
                             "- cannot extend file to required size");
                     }
                     int rv;
+                    long truncLen = align ? alignUp(position + size, alignment) : position + size;
                     do {
                         long comp = Blocker.begin();
                         try {
-                            rv = nd.truncate(fd, position + size);
+                            rv = nd.truncate(fd, truncLen);
                         } finally {
                             Blocker.end(comp);
                         }
@@ -1396,9 +1411,6 @@ public class FileChannelImpl
                     return null;
                 }
 
-                pagePosition = (int)(position % nd.allocationGranularity());
-                long mapPosition = position - pagePosition;
-                mapSize = size + pagePosition;
                 try {
                     // If map did not throw an exception, the address is valid
                     addr = nd.map(fd, prot, mapPosition, mapSize, isSync);
